@@ -1,3 +1,5 @@
+use std::env::args;
+
 const REMAINDER_TO_SHIFT_LEFT: [i64; 2] = [0, 1];
 const REMAINDER_TO_SHIFT_RIGHT: [i64; 2] = [1, 0];
 const REMAINDER_TO_MULTIPLIER: [i64; 2] = [0, 1];
@@ -8,6 +10,7 @@ static mut CACHED_CHAIN_LENGTHS: [i16; CACHE_SIZE] = [0; CACHE_SIZE];
 
 fn compute_collatz_numbers(n: i64, buffer: &mut Vec<i64>) {
     let mut num = n;
+    buffer.push(num);
     while num != 4 {
         let remainder = (num % 2) as usize;
         // println!("num: {}", num);
@@ -38,25 +41,30 @@ fn find_highest_collatz_number(n: i64) -> i64 {
     max_num_found
 }
 
-fn find_longest_collatz_number_chain(n: i64) -> i16 {
+fn find_longest_collatz_number_chain(n: i64, chain_buffer: &mut Vec<i64>) -> i16 {
     let mut num = n;
     let mut chain_length = 0;
     let cast_cache_size = CACHE_SIZE as i64;
     while num != 4 {
+        chain_buffer.push(num);
         let remainder = (num % 2) as usize;
         // println!("num: {}", num);
         // let res = num << REMAINDER_TO_SHIFT_AMOUNT[remainder];
         // println!("num shifted: {}", res);
         // println!("Remainder: {}", remainder);
+
         num = ((num << REMAINDER_TO_SHIFT_LEFT[remainder]) >> REMAINDER_TO_SHIFT_RIGHT[remainder])
             + num * REMAINDER_TO_MULTIPLIER[remainder]
             + REMAINDER_TO_ADDITION[remainder];
         chain_length += 1;
+
         unsafe {
             if num < cast_cache_size {
                 let cached_val = CACHED_CHAIN_LENGTHS[num as usize];
                 if cached_val > 0 {
                     chain_length += cached_val;
+
+                    // println!("Before adding cache: {}", chain_length);
                     break;
                 }
             }
@@ -64,7 +72,15 @@ fn find_longest_collatz_number_chain(n: i64) -> i16 {
     }
 
     unsafe {
-        CACHED_CHAIN_LENGTHS[n as usize] = chain_length;
+        // CACHED_CHAIN_LENGTHS[n as usize] = chain_length;
+        // println!("Chain buffer content for n={}: {:?}", n, chain_buffer);
+
+        for (index, this_number) in chain_buffer.iter().rev().enumerate() {
+            let this_chain_length = chain_length - (index as i16);
+            if *this_number < CACHED_CHAIN_LENGTHS.len() as i64 {
+                CACHED_CHAIN_LENGTHS[this_number.clone() as usize] = this_chain_length;
+            }
+        }
     }
     return chain_length;
 }
@@ -82,14 +98,16 @@ fn print_highest_number_chain() {
     println!("{}", max_num_found);
     let mut buffer: Vec<i64> = Vec::with_capacity(100);
     compute_collatz_numbers(max_num_found, &mut buffer);
-    println!("{:?}", buffer);
+    // println!("{:?}", buffer);
 }
 
-fn print_longest_chain() {
+fn print_longest_chain(iterations: i64) {
     let mut longest_chain_length = 0;
     let mut longest_chain_num = 0;
-    for i in 1..CACHE_SIZE as i64 {
-        let chain_length = find_longest_collatz_number_chain(i);
+    let mut chain_buffer: Vec<i64> = Vec::with_capacity(1000);
+    for i in 1..iterations as i64 {
+        chain_buffer.clear();
+        let chain_length = find_longest_collatz_number_chain(i, &mut chain_buffer);
         if chain_length > longest_chain_length {
             longest_chain_length = chain_length;
             longest_chain_num = i;
@@ -99,9 +117,21 @@ fn print_longest_chain() {
     println!("Value: {}", longest_chain_num);
     let mut buffer: Vec<i64> = Vec::with_capacity(100);
     compute_collatz_numbers(longest_chain_num, &mut buffer);
-    println!("{:?}", buffer);
+    // unsafe {
+    //     // CACHED_CHAIN_LENGTHS.iter().for_each(|val| println!("{}", val));
+    //     println!("{:?}", CACHED_CHAIN_LENGTHS);
+    // }
+    // println!("{:?}", buffer);
 }
 
 fn main() {
-    print_longest_chain();
+    let arguments: Vec<String> = args().collect();
+
+    let iterations: i64 = arguments[1].parse().unwrap();
+
+    let start = std::time::Instant::now();
+    print_longest_chain(iterations);
+    let end = std::time::Instant::now();
+    let duration = (end - start).as_millis();
+    println!("\nOperation took {}ms\n", duration);
 }
